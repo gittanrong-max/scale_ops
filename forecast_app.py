@@ -1,8 +1,10 @@
 import io
 from datetime import datetime
+from typing import cast
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_numeric_dtype
 import plotly.express as px
 import streamlit as st
 from sklearn.linear_model import LinearRegression
@@ -117,7 +119,16 @@ if source is None or source.empty:
 
 st.markdown("---")
 st.subheader("Edit or confirm your series")
-editable = st.experimental_data_editor(source, num_rows="dynamic")
+# Prefer the stable `data_editor` API, fall back to the experimental name, else show a warning
+editor = getattr(st, "data_editor", None) or getattr(st, "experimental_data_editor", None)
+if callable(editor):
+    editable = cast(pd.DataFrame, editor(source, num_rows="dynamic"))
+else:
+    st.warning(
+        "This Streamlit release does not include the interactive data editor. "
+        "You can paste CSV into the text box above to edit your data."
+    )
+    editable = source
 
 if editable is None or editable.empty:
     st.error("Please provide a table with a date column and a numeric value column.")
@@ -133,7 +144,7 @@ except Exception:
     st.error("Could not parse the selected date/time column. Please use valid dates.")
     st.stop()
 
-if not np.issubdtype(editable[value_col].dtype, np.number):
+if not is_numeric_dtype(editable[value_col]):
     try:
         editable[value_col] = pd.to_numeric(editable[value_col], errors="raise")
     except Exception:
